@@ -1,11 +1,15 @@
 #include "mbed.h"
 #include "SPIFlash.h"
+#include <chrono>
 #include <cstdint>
 
 void printPageBytes(uint8_t* dataBuffer);
+void fillWithString(const char* dataString, int stringSize, uint8_t* dataBuffer);
 
 int main()
 {
+  Timer timer;
+
   printf("\n\nProg Start\n");
 
   SPIFlash flashHandle(A6, A5, A4, A3);
@@ -21,34 +25,64 @@ int main()
   flashHandle.getJdecId(&mfrId, &memType, &capacity);
   printf("Manufacturer ID: 0x%02X\nMemory Type: 0x%02X\nMemory Capacity: 0x%02X\n", mfrId, memType, capacity);
 
-  uint8_t byteBuffer[1024];   // 4KB Buffer
+  uint8_t dataBuffer[256];
 
-  flashHandle.eraseSubsector(0x00);
+  timer.start();
+  flashHandle.eraseChip();
+  timer.stop();
+  printf("Erase Chip took %llu ms!\n",chrono::duration_cast<chrono::milliseconds>(timer.elapsed_time()).count());
 
-  //flashHandle.readBytes(0x00, byteBuffer, 1024);
-  //printPageBytes(byteBuffer);
-//
-  //uint8_t writeBuffer[256];
-  //writeBuffer[255] = 0xA1;
-  //writeBuffer[0] = 0x11;
-  //flashHandle.writePage(0x0300, writeBuffer);
-//
-  //writeBuffer[255] = 0xAC;
-  //writeBuffer[0] = 0x33;
-  //flashHandle.writePage(0x00, writeBuffer);
+  timer.reset();
+  fillWithString("SPI Flash Functionality Test", 30, dataBuffer);
+  timer.start();
+  flashHandle.writePage(0x00, dataBuffer);
+  timer.stop();
+  printf("Write Page took %llu ms!\n",chrono::duration_cast<chrono::milliseconds>(timer.elapsed_time()).count());
 
-  flashHandle.readBytes(0x00, byteBuffer, 1024);
-  printPageBytes(byteBuffer);
+  timer.reset();
+  fillWithString("An apple a day keeps the doctor away!", 37, dataBuffer);
+  timer.start();
+  flashHandle.writePage(0x0F00, dataBuffer);
+  timer.stop();
+  printf("Write Page took %llu ms!\n",chrono::duration_cast<chrono::milliseconds>(timer.elapsed_time()).count());
+
+  timer.reset();
+  timer.start();
+  flashHandle.updatePage(0x00, dataBuffer);
+  timer.stop();
+  printf("Update Page took %llu ms!\n",chrono::duration_cast<chrono::milliseconds>(timer.elapsed_time()).count());
+
+  timer.reset();
+  timer.start();
+  flashHandle.readBytes(0x00, dataBuffer, 256);
+  timer.stop();
+  printf("Read Page took %llu ms!\n",chrono::duration_cast<chrono::milliseconds>(timer.elapsed_time()).count());
+  printPageBytes(dataBuffer);
+
+  timer.reset();
+  timer.start();
+  flashHandle.readBytes(0x0F00, dataBuffer, 256);
+  timer.stop();
+  printf("Read Page took %llu ms!\n",chrono::duration_cast<chrono::milliseconds>(timer.elapsed_time()).count());
+  printPageBytes(dataBuffer);
 } 
+
+void fillWithString(const char* dataString, int stringSize, uint8_t* dataBuffer)
+{
+  for(int i = 0; i < stringSize; i++)
+  {
+    dataBuffer[i] = dataString[i];
+  }
+}
 
 void printPageBytes(uint8_t* dataBuffer)
 {
   printf("\n");
-  for(uint8_t i = 0; i < 32; i++)
+  for(uint8_t i = 0; i < 16; i++)
   {
-    for(uint8_t j = 0; j < 32; j++)
+    for(uint8_t j = 0; j < 16; j++)
     {
-      printf("0x%02X ", dataBuffer[i * 32 + j]);
+      printf("\'%c\' ", (char)dataBuffer[i * 16 + j]);
     }
 
     printf("\n");

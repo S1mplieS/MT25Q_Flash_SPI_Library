@@ -3,6 +3,8 @@
 
 SPIFlash::SPIFlash(PinName mosi, PinName miso, PinName clk, PinName cs) : spiHandle(mosi, miso, clk), chipSelect(cs)
 {
+  sectorBuffer = (uint8_t*)malloc(sizeof(uint8_t) * MT25Q_SUBSECTOR_SIZE);
+
   // Code for further initizialation of device
 }
 
@@ -102,7 +104,7 @@ void SPIFlash::writePage(uint32_t addrBytes, uint8_t *dataBuffer)
   spiHandle.write((addrBytes & 0xFF00) >> 8);
   spiHandle.write(0x00);
 
-  for(auto i = 0; i < 256; i++)
+  for(auto i = 0; i < MT25Q_PAGE_SIZE; i++)
   {
     spiHandle.write(dataBuffer[i]);
   }
@@ -152,4 +154,34 @@ void SPIFlash::eraseSubsector(uint32_t addrBytes)
 
   chipSelect = HIGH;
   finishOperation();
+}
+
+/*
+  void updatePage(uint32_t, uint8_t*) re-writes a page. For this to work
+  this function needs to buffer a whole sector and erase it to write all updated pages.
+*/
+void SPIFlash::updatePage(uint32_t addrBytes, uint8_t *dataBuffer)
+{
+  readBytes(addrBytes & 0xFFFFFF00, sectorBuffer, 4096);
+
+  uint16_t pageAddr = addrBytes & 0xF00;
+  for(auto i = pageAddr; i < pageAddr + MT25Q_PAGE_SIZE; i++)
+  {
+    sectorBuffer[i] = dataBuffer[i - pageAddr];
+  }
+
+  eraseSubsector(addrBytes & 0xFFFFF000);
+
+  for(auto i = 0; i < MT25Q_SUBSECTOR_SIZE / MT25Q_PAGE_SIZE; i++)
+  {
+    pageAddr = (addrBytes & 0xFFFFF000) | (i << 8);
+
+    uint8_t pageBuffer[MT25Q_PAGE_SIZE];
+    for(auto j = 0; j < MT25Q_PAGE_SIZE; j++)
+    {
+      pageBuffer[j] = sectorBuffer[(i << 8) | j];
+    }
+
+    writePage(pageAddr, pageBuffer);
+  }
 }

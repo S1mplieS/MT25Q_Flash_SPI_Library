@@ -13,12 +13,16 @@
 #define MT25Q_SUBSECTOR_ERASE     0x21  // 4 Byte Address Mode
 
 // MT25Q JDEC ID Constants (from datasheet of Micron MT25QL256ABA)
-#define MT25Q_MANUFACUTER_ID    0x20
-#define MT25Q_MEMORY_TYPE       0xBA  // 3V
-#define MT25Q_MEMORY_CAPACITY   0x19  // 256Mb
+#define MT25Q_MANUFACUTER_ID      0x20
+#define MT25Q_MEMORY_TYPE         0xBA  // 3V
+#define MT25Q_MEMORY_CAPACITY     0x19  // 256Mb
 
-#define HIGH                    0x01
-#define LOW                     0x00
+// Mt25Q Memory Constants (from datasheet of Micron MT25QL256ABA)
+#define MT25Q_PAGE_SIZE           256   // 256 Byte
+#define MT25Q_SUBSECTOR_SIZE      4096  // 4KB
+
+#define HIGH                      0x01
+#define LOW                       0x00
 
 class SPIFlash
 {
@@ -28,12 +32,14 @@ class SPIFlash
     void getJdecId(uint8_t* mfrId, uint8_t* memType, uint8_t* capacity);
     void readBytes(uint32_t addrBytes, uint8_t* dataBuffer, uint16_t dataSize);
     void writePage(uint32_t addrBytes, uint8_t* dataBuffer);
+    void updatePage(uint32_t addrBytes, uint8_t* dataBuffer);
     void eraseChip(void);
     void eraseSubsector(uint32_t addrBytes);
 
   private:
     SPI spiHandle;
     DigitalOut chipSelect;
+    uint8_t* sectorBuffer;
 
     void finishOperation(void);
 };
