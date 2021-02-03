@@ -27,7 +27,7 @@
 class SPIFlash
 {
   public:
-    SPIFlash(PinName mosi, PinName miso, PinName clk, PinName cs);
+    SPIFlash(SPI* spiPort, PinName cs);
     int isAvailable(void);
     void getJdecId(uint8_t* mfrId, uint8_t* memType, uint8_t* capacity);
     void readBytes(uint32_t addrBytes, uint8_t* dataBuffer, uint16_t dataSize);
@@ -37,7 +37,7 @@ class SPIFlash
     void eraseSubsector(uint32_t addrBytes);
 
   private:
-    SPI spiHandle;
+    SPI* spiPort;
     DigitalOut chipSelect;
     uint8_t* sectorBuffer;
 

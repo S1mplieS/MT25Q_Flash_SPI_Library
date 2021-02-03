@@ -1,9 +1,10 @@
 #include "SPIFlash.h"
 #include <cstdint>
 
-SPIFlash::SPIFlash(PinName mosi, PinName miso, PinName clk, PinName cs) : spiHandle(mosi, miso, clk), chipSelect(cs)
+SPIFlash::SPIFlash(SPI* spiPort, PinName cs) : chipSelect(cs)
 {
   sectorBuffer = (uint8_t*)malloc(sizeof(uint8_t) * MT25Q_SUBSECTOR_SIZE);
+  this->spiPort = spiPort;
 
   // Code for further initizialation of device
 }
@@ -16,9 +17,9 @@ void SPIFlash::finishOperation(void)
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiHandle.write(MT25Q_READ_STATUS_REG);
+  spiPort->write(MT25Q_READ_STATUS_REG);
 
-  while(spiHandle.write(0x00) & 0x01){};
+  while(spiPort->write(0x00) & 0x01){};
 
   chipSelect = HIGH;
 }
@@ -32,10 +33,10 @@ void SPIFlash::getJdecId(uint8_t *mfrId, uint8_t *memType, uint8_t *capacity)
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiHandle.write(MT25Q_JEDEC_ID);
-  *mfrId = spiHandle.write(0x00);     // Read Manufacturer ID (1st Byte of JEDEC ID)
-  *memType = spiHandle.write(0x00);   // Read Memory Type (2nd Byte of JEDEC ID)
-  *capacity = spiHandle.write(0x00);  // Read Memory Capacity (3rd Byte of JEDEC ID)
+  spiPort->write(MT25Q_JEDEC_ID);
+  *mfrId = spiPort->write(0x00);     // Read Manufacturer ID (1st Byte of JEDEC ID)
+  *memType = spiPort->write(0x00);   // Read Memory Type (2nd Byte of JEDEC ID)
+  *capacity = spiPort->write(0x00);  // Read Memory Capacity (3rd Byte of JEDEC ID)
 
   chipSelect = HIGH;
 }
@@ -69,16 +70,16 @@ void SPIFlash::readBytes(uint32_t addrBytes, uint8_t* dataBuffer, uint16_t dataS
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiHandle.write(MT25Q_READ_DATA);
+  spiPort->write(MT25Q_READ_DATA);
 
-  spiHandle.write((addrBytes & 0xFF000000) >> 24);
-  spiHandle.write((addrBytes & 0xFF0000) >> 16);
-  spiHandle.write((addrBytes & 0xFF00) >> 8);
-  spiHandle.write((addrBytes & 0xFF));
+  spiPort->write((addrBytes & 0xFF000000) >> 24);
+  spiPort->write((addrBytes & 0xFF0000) >> 16);
+  spiPort->write((addrBytes & 0xFF00) >> 8);
+  spiPort->write((addrBytes & 0xFF));
 
   for(auto i = 0; i < dataSize; i++)
   {
-    dataBuffer[i] = spiHandle.write(0x00);
+    dataBuffer[i] = spiPort->write(0x00);
   }
 
   chipSelect = HIGH;
@@ -92,21 +93,21 @@ void SPIFlash::writePage(uint32_t addrBytes, uint8_t *dataBuffer)
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiHandle.write(MT25Q_WRITE_ENABLE);
+  spiPort->write(MT25Q_WRITE_ENABLE);
 
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiHandle.write(MT25Q_PAGE_PROGRAM);
+  spiPort->write(MT25Q_PAGE_PROGRAM);
 
-  spiHandle.write((addrBytes & 0xFF000000) >> 24);
-  spiHandle.write((addrBytes & 0xFF0000) >> 16);
-  spiHandle.write((addrBytes & 0xFF00) >> 8);
-  spiHandle.write(0x00);
+  spiPort->write((addrBytes & 0xFF000000) >> 24);
+  spiPort->write((addrBytes & 0xFF0000) >> 16);
+  spiPort->write((addrBytes & 0xFF00) >> 8);
+  spiPort->write(0x00);
 
   for(auto i = 0; i < MT25Q_PAGE_SIZE; i++)
   {
-    spiHandle.write(dataBuffer[i]);
+    spiPort->write(dataBuffer[i]);
   }
 
   chipSelect = HIGH;
@@ -121,12 +122,12 @@ void SPIFlash::eraseChip(void)
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiHandle.write(MT25Q_WRITE_ENABLE);
+  spiPort->write(MT25Q_WRITE_ENABLE);
 
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiHandle.write(MT25Q_CHIP_EREASE);
+  spiPort->write(MT25Q_CHIP_EREASE);
 
   chipSelect = HIGH;
   finishOperation();
@@ -140,17 +141,17 @@ void SPIFlash::eraseSubsector(uint32_t addrBytes)
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiHandle.write(MT25Q_WRITE_ENABLE);
+  spiPort->write(MT25Q_WRITE_ENABLE);
 
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiHandle.write(MT25Q_SUBSECTOR_ERASE);
+  spiPort->write(MT25Q_SUBSECTOR_ERASE);
 
-  spiHandle.write((addrBytes & 0xFF000000) >> 24);
-  spiHandle.write((addrBytes & 0xFF0000) >> 16);
-  spiHandle.write((addrBytes & 0xFF00) >> 8);
-  spiHandle.write((addrBytes & 0xFF));
+  spiPort->write((addrBytes & 0xFF000000) >> 24);
+  spiPort->write((addrBytes & 0xFF0000) >> 16);
+  spiPort->write((addrBytes & 0xFF00) >> 8);
+  spiPort->write((addrBytes & 0xFF));
 
   chipSelect = HIGH;
   finishOperation();

@@ -11,8 +11,8 @@ int main()
   Timer timer;
 
   printf("\n\nProg Start\n");
-
-  SPIFlash flashHandle(A6, A5, A4, A3);
+  SPI spiPort(A6, A5, A4);
+  SPIFlash flashHandle(&spiPort, A3);
 
   // Check if chip is available
   if(flashHandle.isAvailable() == -1)
