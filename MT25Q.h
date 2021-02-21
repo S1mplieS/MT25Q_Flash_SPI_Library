@@ -24,11 +24,11 @@
 #define HIGH                      0x01
 #define LOW                       0x00
 
-class SPIFlash
+class MT25Q
 {
   public:
-    SPIFlash(SPI* spiPort, PinName cs);
-    int isAvailable(void);
+    MT25Q(SPI* spiPort, PinName cs);
+    bool isAvailable(void);
     void getJdecId(uint8_t* mfrId, uint8_t* memType, uint8_t* capacity);
     void readBytes(uint32_t addrBytes, uint8_t* dataBuffer, uint16_t dataSize);
     void writePage(uint32_t addrBytes, uint8_t* dataBuffer);
