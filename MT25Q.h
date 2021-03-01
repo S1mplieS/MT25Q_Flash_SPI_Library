@@ -36,7 +36,7 @@ class MT25Q
     bool isAvailable(void);
     bool isMemoryReady(void);
     void readBytes(uint32_t addr, uint8_t* buffer, size_t size);
-    void writeBytes(uint32_t addr, const uint8_t* data, size_t size);
+    void writeBytes(uint32_t addr, const uint8_t* data);
     void eraseBytes(uint32_t addr);
     void eraseChip(void);
     void updateBytes(uint32_t addr, const uint8_t* data);

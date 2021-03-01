@@ -144,7 +144,7 @@ void MT25Q::sendProgramCommand(uint64_t addr, const uint8_t* data)
   void writeBytes(uint32_t, const uint8_t*) writes bytes to flash.
   Data must be written a page at a time (256 bytes).
 */
-void MT25Q::writeBytes(uint32_t addr, const uint8_t *data, size_t size = 256)
+void MT25Q::writeBytes(uint32_t addr, const uint8_t *data)
 {
   sendProgramCommand(addr, data);
 }
