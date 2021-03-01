@@ -1,60 +1,100 @@
 #include "MT25Q.h"
+#include <chrono>
 #include <cstdint>
 
-MT25Q::MT25Q(SPI* spiPort, PinName cs) : chipSelect(cs)
+MT25Q::MT25Q(PinName mosi, PinName miso, PinName clk, PinName cs) : spi(mosi, miso, clk), chipSelect(cs)
 {
-  sectorBuffer = (uint8_t*)malloc(sizeof(uint8_t) * MT25Q_SUBSECTOR_SIZE);
-  this->spiPort = spiPort;
+  spi.format(8);
+  spi.frequency(10000000);
 
   // Code for further initizialation of device
 }
 
 /*
-  void finishOperation(void) waits until current operation is finished.
+  void sendGeneralCommand(uint8_t, uint64_t, const uint8_t*, size_t, uint8_t*, size_t) sends command to flash controller
+  and recieves or transmits additional data.
 */
-void MT25Q::finishOperation(void)
+void MT25Q::sendGeneralCommand(uint8_t cmd, uint64_t addr, const uint8_t* txBuffer, size_t txSize, uint8_t* rxBuffer, size_t rxSize)
 {
+  printf("command: 0x%02X addr: 0x%02X\n", cmd, addr);
+
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiPort->write(MT25Q_READ_STATUS_REG);
+  spi.write(cmd);
 
-  while(spiPort->write(0x00) & 0x01){};
+  if(addr != NO_ADDRESS_COMMAND)
+  {
+    // Write 4 Byte Address
+    for(auto addrShift = 24; addrShift >= 0; addrShift -= 8)
+    {
+      spi.write((addr >> addrShift) & 0xFF);
+    }
+  }
+
+  // Write Data
+  for(auto i = 0; i < txSize; i++)
+  {
+    spi.write(txBuffer[i]);
+  }
+
+  // Read Data
+  for(auto i = 0; i < rxSize; i++)
+  {
+    rxBuffer[i] = spi.write(0x00);
+  }
 
   chipSelect = HIGH;
 }
 
 /*
-  void getJedecId(uint8_t*, uint8_t*, uint8_t*) reads and returns the 3 byte JEDEC ID
-  of the connected device.
+  void sendReadCommand(uint64_t, uint8_t*, size_t) sends read command to flash controller and returns recieved data.
 */
-void MT25Q::getJdecId(uint8_t *mfrId, uint8_t *memType, uint8_t *capacity)
+void MT25Q::sendReadCommand(uint64_t addr, uint8_t* buffer, size_t size)
 {
   chipSelect = HIGH;
   chipSelect = LOW;
 
-  spiPort->write(MT25Q_JEDEC_ID);
-  *mfrId = spiPort->write(0x00);     // Read Manufacturer ID (1st Byte of JEDEC ID)
-  *memType = spiPort->write(0x00);   // Read Memory Type (2nd Byte of JEDEC ID)
-  *capacity = spiPort->write(0x00);  // Read Memory Capacity (3rd Byte of JEDEC ID)
+  spi.write(MT25Q_READ_DATA);
+
+  // Write 4 Byte Address
+  for(auto addrShift = 24; addrShift >= 0; addrShift -= 8)
+  {
+    spi.write((addr >> addrShift) & 0xFF);
+  }
+
+  // Read Data
+  for(auto i = 0; i < size; i++)
+  {
+    buffer[i] = spi.write(0x00);
+  }
 
   chipSelect = HIGH;
+}
+
+/*
+  void readBytes(uint32_t, uint8_t*, size_t) reads bytes starting from given 4 byte address.
+*/
+void MT25Q::readBytes(uint32_t addr, uint8_t* buffer, size_t size)
+{
+  sendReadCommand(addr, buffer, size);
 }
 
 /*
   bool isAvailable(void) checks if the chip is working through JEDEC ID comparison.
 
   Returns:
-    - false    if JEDEC ID does match the expected values
-    - true     if JEDEC ID does not match the expected values 
+    - true    if JEDEC ID does match the expected values
+    - false   if JEDEC ID does not match the expected values 
 */
 bool MT25Q::isAvailable(void)
 {
-  uint8_t mfrId, memType, capacity;
+  uint8_t jedecInfo[3];
+  sendGeneralCommand(MT25Q_JEDEC_ID, NO_ADDRESS_COMMAND, NULL, 0, jedecInfo, 3);
 
-  getJdecId(&mfrId, &memType, &capacity);
+  printf("%X %X %X\n", jedecInfo[0], jedecInfo[1], jedecInfo[2]);
 
-  if(mfrId != MT25Q_MANUFACUTER_ID || memType != MT25Q_MEMORY_TYPE || capacity != MT25Q_MEMORY_CAPACITY)
+  if(jedecInfo[0] != MT25Q_MANUFACUTER_ID || jedecInfo[1] != MT25Q_MEMORY_TYPE || jedecInfo[2] != MT25Q_MEMORY_CAPACITY)
   {
     return false;
   }
@@ -63,126 +103,107 @@ bool MT25Q::isAvailable(void)
 }
 
 /*
-  void readBytes(uint32_t, uint8_t*, uint16_t) reads bytes from the flash chip starting from a 4 Byte Address.
+  bool isMemoryReady(void) reads Status Register if a write is in progress. 
+  If not, chip is ready to recieve further commands.
 */
-void MT25Q::readBytes(uint32_t addrBytes, uint8_t* dataBuffer, uint16_t dataSize)
+bool MT25Q::isMemoryReady(void)
 {
-  chipSelect = HIGH;
-  chipSelect = LOW;
+  uint8_t statusValues[2];
+  int retries = 0;
 
-  spiPort->write(MT25Q_READ_DATA);
-
-  spiPort->write((addrBytes & 0xFF000000) >> 24);
-  spiPort->write((addrBytes & 0xFF0000) >> 16);
-  spiPort->write((addrBytes & 0xFF00) >> 8);
-  spiPort->write((addrBytes & 0xFF));
-
-  for(auto i = 0; i < dataSize; i++)
+  do
   {
-    dataBuffer[i] = spiPort->write(0x00);
+    ThisThread::sleep_for(chrono::milliseconds(1));
+    sendGeneralCommand(MT25Q_READ_STATUS_REG, NO_ADDRESS_COMMAND, NULL, 0, statusValues, 1);
+    retries++;
+
+  } while((statusValues[0] & WRITE_IN_PROGRESS) != 0 && retries < 1000);
+
+  if((statusValues[0] & WRITE_IN_PROGRESS) != 0)
+  {
+    return false;
   }
 
-  chipSelect = HIGH;
+  return true;
 }
 
 /*
-  void writePage(uint32_t, uint8_t*) writes a page (256 bytes) of data to the flash chip.
+  void sendProgramCommand(uint64_t, const uint8_t*) writes bytes to flash memory
+  using program command.
 */
-void MT25Q::writePage(uint32_t addrBytes, uint8_t *dataBuffer)
+void MT25Q::sendProgramCommand(uint64_t addr, const uint8_t* data)
 {
-  chipSelect = HIGH;
-  chipSelect = LOW;
+  sendGeneralCommand(MT25Q_WRITE_ENABLE, NO_ADDRESS_COMMAND, NULL, 0, NULL, 0);
+  sendGeneralCommand(MT25Q_PROGRAM, addr, data, MT25Q_PAGE_SIZE, NULL, 0);
 
-  spiPort->write(MT25Q_WRITE_ENABLE);
-
-  chipSelect = HIGH;
-  chipSelect = LOW;
-
-  spiPort->write(MT25Q_PAGE_PROGRAM);
-
-  spiPort->write((addrBytes & 0xFF000000) >> 24);
-  spiPort->write((addrBytes & 0xFF0000) >> 16);
-  spiPort->write((addrBytes & 0xFF00) >> 8);
-  spiPort->write(0x00);
-
-  for(auto i = 0; i < MT25Q_PAGE_SIZE; i++)
-  {
-    spiPort->write(dataBuffer[i]);
-  }
-
-  chipSelect = HIGH;
-  finishOperation();
+  // Wait until all write operations are finished
+  isMemoryReady();
 }
 
 /*
-  void eraseChip(void) erases all data from flash chip.
+  void writeBytes(uint32_t, const uint8_t*) writes bytes to flash.
+  Data must be written a page at a time (256 bytes).
+*/
+void MT25Q::writeBytes(uint32_t addr, const uint8_t *data, size_t size = 256)
+{
+  sendProgramCommand(addr, data);
+}
+
+/*
+  void sendEraseCommand(uint64_t) sends command erase command and waits until operation is done.
+*/
+void MT25Q::sendEraseCommand(uint8_t eraseCmd, uint64_t addr)
+{
+  sendGeneralCommand(MT25Q_WRITE_ENABLE, NO_ADDRESS_COMMAND, NULL, 0, NULL, 0);
+  sendGeneralCommand(eraseCmd, addr, NULL, 0, NULL, 0);
+
+  // Wait until all write operations are finished
+  isMemoryReady();
+}
+
+/*
+  void eraseBytes(uint32_t) erases a whole Subsector (4KB) at a given address.
+*/
+void MT25Q::eraseBytes(uint32_t addr)
+{
+  sendEraseCommand(MT25Q_SUBSECTOR_ERASE, addr);
+}
+
+/*
+  void eraseChip(void) erases whole chip and waits until operation is done.
 */
 void MT25Q::eraseChip(void)
 {
-  chipSelect = HIGH;
-  chipSelect = LOW;
-
-  spiPort->write(MT25Q_WRITE_ENABLE);
-
-  chipSelect = HIGH;
-  chipSelect = LOW;
-
-  spiPort->write(MT25Q_CHIP_EREASE);
-
-  chipSelect = HIGH;
-  finishOperation();
+  sendEraseCommand(MT25Q_BULK_ERASE, NO_ADDRESS_COMMAND);
 }
 
 /*
-  void eraseSubsector(uint32_t) erases all data from a Subsector.
+  void updateBytes(uint32_t, const uint8_t*) updates page at given address.
+  Because page must be erased before re-written and the min size to erase
+  is a Subsector (4KB), rest of Subsector must be buffered and also re-written.
 */
-void MT25Q::eraseSubsector(uint32_t addrBytes)
+void MT25Q::updateBytes(uint32_t addr, const uint8_t* data)
 {
-  chipSelect = HIGH;
-  chipSelect = LOW;
+  uint8_t* sectorBuffer = (uint8_t*)malloc(sizeof(uint8_t) * MT25Q_SUBSECTOR_SIZE);
 
-  spiPort->write(MT25Q_WRITE_ENABLE);
-
-  chipSelect = HIGH;
-  chipSelect = LOW;
-
-  spiPort->write(MT25Q_SUBSECTOR_ERASE);
-
-  spiPort->write((addrBytes & 0xFF000000) >> 24);
-  spiPort->write((addrBytes & 0xFF0000) >> 16);
-  spiPort->write((addrBytes & 0xFF00) >> 8);
-  spiPort->write((addrBytes & 0xFF));
-
-  chipSelect = HIGH;
-  finishOperation();
-}
-
-/*
-  void updatePage(uint32_t, uint8_t*) re-writes a page. For this to work
-  this function needs to buffer a whole sector and erase it to write all updated pages.
-*/
-void MT25Q::updatePage(uint32_t addrBytes, uint8_t *dataBuffer)
-{
-  readBytes(addrBytes & 0xFFFFFF00, sectorBuffer, 4096);
-
-  uint16_t pageAddr = addrBytes & 0xF00;
-  for(auto i = pageAddr; i < pageAddr + MT25Q_PAGE_SIZE; i++)
+  if(sectorBuffer == NULL)
   {
-    sectorBuffer[i] = dataBuffer[i - pageAddr];
+    printf("[Error] Failed to allocate memory!\n");
+    return;
   }
 
-  eraseSubsector(addrBytes & 0xFFFFF000);
+  sendReadCommand(addr & 0xFFFFF000, sectorBuffer, MT25Q_SUBSECTOR_SIZE);
+
+  uint16_t pageAddr = addr & 0xF00;
+  copy_n(data, MT25Q_PAGE_SIZE, &sectorBuffer[addr & 0xF00]);
+
+  sendEraseCommand(MT25Q_SUBSECTOR_ERASE, addr & 0xFFFFF000);
 
   for(auto i = 0; i < MT25Q_SUBSECTOR_SIZE / MT25Q_PAGE_SIZE; i++)
   {
-    pageAddr = (addrBytes & 0xFFFFF000) | (i << 8);
-
-    uint8_t pageBuffer[MT25Q_PAGE_SIZE];
-    for(auto j = 0; j < MT25Q_PAGE_SIZE; j++)
-    {
-      pageBuffer[j] = sectorBuffer[(i << 8) | j];
-    }
-
-    writePage(pageAddr, pageBuffer);
+    uint32_t pageAddr = (addr & 0xFFFFF000) | (i << 8);
+    writeBytes(pageAddr, &sectorBuffer[i * MT25Q_PAGE_SIZE]);
   }
+
+  free(sectorBuffer);
 }
