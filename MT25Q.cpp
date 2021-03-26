@@ -2,6 +2,8 @@
 #include <chrono>
 #include <cstdint>
 
+uint8_t MT25Q::sectorBuffer[];
+
 MT25Q::MT25Q(PinName mosi, PinName miso, PinName clk, PinName cs) : spi(mosi, miso, clk), chipSelect(cs)
 {
   spi.format(8);
@@ -16,7 +18,7 @@ MT25Q::MT25Q(PinName mosi, PinName miso, PinName clk, PinName cs) : spi(mosi, mi
 */
 void MT25Q::sendGeneralCommand(uint8_t cmd, uint64_t addr, const uint8_t* txBuffer, size_t txSize, uint8_t* rxBuffer, size_t rxSize)
 {
-  printf("command: 0x%02X addr: 0x%02X\n", cmd, addr);
+  //printf("command: 0x%02X addr: 0x%02X\n", cmd, (uint32_t)addr);
 
   chipSelect = HIGH;
   chipSelect = LOW;
@@ -184,14 +186,6 @@ void MT25Q::eraseChip(void)
 */
 void MT25Q::updateBytes(uint32_t addr, const uint8_t* data)
 {
-  uint8_t* sectorBuffer = (uint8_t*)malloc(sizeof(uint8_t) * MT25Q_SUBSECTOR_SIZE);
-
-  if(sectorBuffer == NULL)
-  {
-    printf("[Error] Failed to allocate memory!\n");
-    return;
-  }
-
   sendReadCommand(addr & 0xFFFFF000, sectorBuffer, MT25Q_SUBSECTOR_SIZE);
 
   uint16_t pageAddr = addr & 0xF00;
@@ -204,6 +198,4 @@ void MT25Q::updateBytes(uint32_t addr, const uint8_t* data)
     uint32_t pageAddr = (addr & 0xFFFFF000) | (i << 8);
     writeBytes(pageAddr, &sectorBuffer[i * MT25Q_PAGE_SIZE]);
   }
-
-  free(sectorBuffer);
 }

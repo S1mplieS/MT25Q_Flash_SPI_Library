@@ -44,6 +44,7 @@ class MT25Q
   private:
     SPI spi;
     DigitalOut chipSelect;
+    static uint8_t sectorBuffer[MT25Q_SUBSECTOR_SIZE];
 
     void sendGeneralCommand(uint8_t cmd, uint64_t addr, const uint8_t* txBuffer, size_t txSize, uint8_t* rxBuffer, size_t rxSize);
     void sendReadCommand(uint64_t addr, uint8_t* buffer, size_t size);
