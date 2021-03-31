@@ -7,7 +7,7 @@ uint8_t MT25Q::sectorBuffer[];
 MT25Q::MT25Q(PinName mosi, PinName miso, PinName clk, PinName cs) : spi(mosi, miso, clk), chipSelect(cs)
 {
   spi.format(8);
-  spi.frequency(10000000);
+  spi.frequency(40000000);
 
   // Code for further initizialation of device
 }
@@ -94,7 +94,7 @@ bool MT25Q::isAvailable(void)
   uint8_t jedecInfo[3];
   sendGeneralCommand(MT25Q_JEDEC_ID, NO_ADDRESS_COMMAND, NULL, 0, jedecInfo, 3);
 
-  printf("%X %X %X\n", jedecInfo[0], jedecInfo[1], jedecInfo[2]);
+  // printf("%X %X %X\n", jedecInfo[0], jedecInfo[1], jedecInfo[2]);
 
   if(jedecInfo[0] != MT25Q_MANUFACUTER_ID || jedecInfo[1] != MT25Q_MEMORY_TYPE || jedecInfo[2] != MT25Q_MEMORY_CAPACITY)
   {
