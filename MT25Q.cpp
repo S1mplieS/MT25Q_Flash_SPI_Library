@@ -94,7 +94,7 @@ bool MT25Q::isAvailable(void)
   uint8_t jedecInfo[3];
   sendGeneralCommand(MT25Q_JEDEC_ID, NO_ADDRESS_COMMAND, NULL, 0, jedecInfo, 3);
 
-  // printf("%X %X %X\n", jedecInfo[0], jedecInfo[1], jedecInfo[2]);
+  printf("%X %X %X\n", jedecInfo[0], jedecInfo[1], jedecInfo[2]);
 
   if(jedecInfo[0] != MT25Q_MANUFACUTER_ID || jedecInfo[1] != MT25Q_MEMORY_TYPE || jedecInfo[2] != MT25Q_MEMORY_CAPACITY)
   {
@@ -189,7 +189,7 @@ void MT25Q::updateBytes(uint32_t addr, const uint8_t* data)
   sendReadCommand(addr & 0xFFFFF000, sectorBuffer, MT25Q_SUBSECTOR_SIZE);
 
   uint16_t pageAddr = addr & 0xF00;
-  copy_n(data, MT25Q_PAGE_SIZE, &sectorBuffer[addr & 0xF00]);
+  copy_n(data, MT25Q_PAGE_SIZE, &sectorBuffer[pageAddr]);
 
   sendEraseCommand(MT25Q_SUBSECTOR_ERASE, addr & 0xFFFFF000);
 
